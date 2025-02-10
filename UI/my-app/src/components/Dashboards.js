@@ -1,27 +1,25 @@
 // src/Dashboard.js
 import React from 'react';
-
 import { useState } from 'react';
 import './App.css';
 import LeftSidebar from './LeftSidebar';
 import MainContent from './MainContent';
-import ThemeProvider from './main_sub_components/ThemeProvider'; // Import ThemeProvider
+import ThemeProvider from './main_sub_components/ThemeProvider'; 
 
 function Dashboard({ onLogout}) {
 
   const [history, setHistory] = useState({ today: [], yesterday: [], last_week: [], last_month: [] });
-  const [selectedSessionId, setSelectedSessionId] = useState(null); // Store the selected session ID
-  const [selectedFiles, setSelectedFiles] = useState([]); // Store selected files
-  const [selectedFolderPath, setSelectedFolderPath] = useState(""); 
+  const [selectedSessionId, setSelectedSessionId] = useState(null);
+  const [selectedFiles, setSelectedFiles] = useState([]); 
 
   // Callback function to handle history clicks
   const handleHistoryClick = (session_id) => {
-    setSelectedSessionId(session_id); // Set the selected session ID
-  };
+    setSelectedSessionId(session_id); 
+  }; 
 
   // Callback to handle file selection from LeftSidebar
   const handleFileSelection = (files) => {
-    setSelectedFiles(files); // Update selected files in state
+    setSelectedFiles(files); 
   };
 
   return (
@@ -30,11 +28,10 @@ function Dashboard({ onLogout}) {
 
         <div className="container">
 
-          <LeftSidebar history={history} onLogout={onLogout}  setSelectedFolderPath={setSelectedFolderPath}
+          <LeftSidebar history={history} onLogout={onLogout} 
            onHistoryClick={handleHistoryClick} onFileSelect={handleFileSelection} />
-          <MainContent setHistory={setHistory} selectedSessionId={selectedSessionId} selectedFolderPath={selectedFolderPath}
+          <MainContent setHistory={setHistory} selectedSessionId={selectedSessionId}
           resetSelectedSessionId={() => setSelectedSessionId(null)}  selectedFiles={selectedFiles} />
-          {/* <RightSidebar /> */}
         </div>
       </div>
 
