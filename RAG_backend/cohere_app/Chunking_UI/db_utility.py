@@ -71,17 +71,15 @@ def fetch_all_documents(collection_name):
         connection = create_connection()
         cursor = connection.cursor()
 
-        # Check if the table exists
         check_table_query = f"""
             SELECT COUNT(*) 
             FROM information_schema.tables 
             WHERE table_name = 'user_access_{collection_name}';
         """
         cursor.execute(check_table_query)
-        table_exists = cursor.fetchone()[0] > 0  # Returns True if the table exists
+        table_exists = cursor.fetchone()[0] > 0 
         document_names = []
         if table_exists:
-            # Query to select document_name from the table
             select_table_query = f'''
                 SELECT document_name FROM user_access_{collection_name};
             '''
@@ -92,12 +90,11 @@ def fetch_all_documents(collection_name):
         cursor.close()
         connection.close()
         return document_names
-
     except Exception as e:
         print(f"Error: {str(e)}")
         return []
 
-def insert_user_access( document_source, chunking_status, message, collection_name):
+def insert_user_access( document_name, chunking_status, message, collection_name):
     connection = create_connection()
     cursor = connection.cursor() 
 
@@ -105,7 +102,7 @@ def insert_user_access( document_source, chunking_status, message, collection_na
     INSERT INTO user_access_{collection_name} (document_name, chunking_status, message) 
     VALUES (%s, %s, %s);
     '''
-    cursor.execute(insert_query, (document_source, chunking_status, message))
+    cursor.execute(insert_query, (document_name, chunking_status, message))
     connection.commit()
 
 
@@ -139,9 +136,14 @@ def insert_chunking_monitor(query):
 
 def update_ocr_status(document_source, collection_name):
     connection = create_connection()
-    cursor = connection.cursor() 
+    cursor = connection.cursor()
 
     update_query = f'''
-    UPDATE user_access_{collection_name} SET message = 'text extraction done' WHERE WHERE document_name = {document_source}'''
-    cursor.execute(update_query)
+    UPDATE user_access_{collection_name} 
+    SET message = 'text extraction done' 
+    WHERE document_name = %s;
+    '''
+    cursor.execute(update_query, (document_source,))
     connection.commit()
+    cursor.close()
+    connection.close()

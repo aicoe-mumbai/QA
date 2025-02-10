@@ -3,8 +3,6 @@ from transformers import AutoTokenizer, AutoModelForCausalLM, TextIteratorStream
 from sentence_transformers import SentenceTransformer
 from functools import lru_cache 
 from pymilvus import connections, Collection
-import os
-from .globals import global_collection_name
 from .models import CurrentUsingCollection
 import re
 
@@ -28,7 +26,6 @@ collection_name = get_current_using_collection_value()
 
 if collection_name:
     MILVUS_COLLECTION = collection_name
-
 
 def load_model_and_tokenizer():
     model = AutoModelForCausalLM.from_pretrained(MODEL_NAME).to(device)
@@ -166,7 +163,7 @@ def process_query(user_input, selected_file, system_id, batch_size=3):
             for hit in batch_results
         ]
        
-        yield '\n\n'.join(sources)
+        yield '\n'.join(sources)
 
     except Exception as e:
         yield f"Error occurred: {str(e)}"

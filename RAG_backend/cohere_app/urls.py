@@ -1,4 +1,3 @@
-# urls.py
 from django.urls import path
 from .views import *
 
@@ -8,11 +7,12 @@ urlpatterns = [
     path('history/<str:session_id>/', get_session_history, name='get_session_history'),  
     path('login/', login_user, name='login'),
     path('logout/', logout_user, name='logout'),
+    path('token/refresh/', refresh_access_token, name='token-refresh'),
     path('save-comment/<int:pk>/',save_comment, name='save-comment'),
-    path('mark_satisfied/<int:pk>/', mark_satisfied, name='mark_satisfied'),
-    path('mark_unsatisfied/<int:pk>/', mark_unsatisfied, name='mark_unsatisfied'),
+    path('mark_satisfied_or_unsatisfied/<int:pk>/', mark_satisfied_or_unsatisfied, name='mark_unsatisfied'),
     path('documents/', get_documents),
-    path('serve-pdf/<path:filename>/<int:page_number>/', serve_pdf, name='serve_pdf'),
+    path('get-folder/',get_folder_name),
+    path('serve-file/<path:filename>/<int:page_number>/', serve_file, name='serve_pdf'),
     path('collections/', get_collection_name, name='get_collections'),
     path('collections/<str:collection_name>/files/', collection_files, name='collection-files'),
     path('collections/<str:collection_name>/delete/', delete_collection, name='delete-collection'),

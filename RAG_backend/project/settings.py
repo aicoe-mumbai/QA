@@ -108,9 +108,9 @@ CORS_ALLOW_ALL_ORIGINS = True
 #     "http://192.168.112.143:3000", 
 # ]
 
-CORS_ALLOWED_ORIGINS=[
-    config('CORS_IP')
-]
+# CORS_ALLOWED_ORIGINS=[
+#     config('CORS_IP')
+# ]
 
 CORS_ALLOW_CREDENTIALS = True
 CORS_EXPOSE_HEADERS = ['Authorization', 'X-Custom-Header']
@@ -122,8 +122,6 @@ CORS_ALLOW_HEADERS = [
     'x-history-id',
     'x-session-id',
 ]
-# cohere key
-COHERE_API_KEY = 'MT3MrAlfWiPvE4Yeet6bGtTPKMO2lnpGV4PYMafa'
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
@@ -139,14 +137,12 @@ REST_FRAMEWORK = {
 
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(days=365),  
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=365),
+    'ACCESS_TOKEN_LIFETIME': timedelta(days=7),  
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=10),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
-
-
 
 
 MEDIA_URL = '/media/'
