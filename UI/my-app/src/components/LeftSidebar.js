@@ -2,22 +2,18 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './LeftSidebar.css';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faHistory, faCloudArrowUp, faSignOutAlt } from '@fortawesome/free-solid-svg-icons';
+import { faHistory, faSignOutAlt } from '@fortawesome/free-solid-svg-icons';
 import Select from 'react-select';
-import { useContext } from 'react';
-import { ThemeContext } from './main_sub_components/ThemeProvider';
-import { faMoon, faSun } from '@fortawesome/free-solid-svg-icons';
+import { Cascader } from "antd";
 
-function LeftSidebar({ history, onHistoryClick, onFileSelect, onLogout, setSelectedFolderPath}) {
+function LeftSidebar({ history, onHistoryClick, onFileSelect, onLogout }) {
   const navigate = useNavigate();
   const [selectedOptions, setSelectedOptions] = useState([]);
   const [userName, setUserName] = useState('');
   const [options, setOptions] = useState([]);
-  const { isDarkMode, toggleDarkMode } = useContext(ThemeContext);
   const apiUrl = process.env.REACT_APP_API_URL;
 
 
-  // Fetch the username from localStorage when the component mounts
   useEffect(() => {
     const storedUserName = sessionStorage.getItem('userName');
     if (storedUserName) {
@@ -26,14 +22,13 @@ function LeftSidebar({ history, onHistoryClick, onFileSelect, onLogout, setSelec
     }
   }, []);
 
-  // Fetch options from the backend API
   useEffect(() => {
     const fetchOptions = async () => {
       try {
         const response = await fetch(`${apiUrl}/api/documents/`, {
           method: 'GET',
           headers: {
-            'Authorization': `Bearer ${sessionStorage.getItem('authToken')}`, // Include the auth token here
+            'Authorization': `Bearer ${sessionStorage.getItem('authToken')}`,
             'Content-Type': 'application/json',
           },
         });
@@ -54,41 +49,14 @@ function LeftSidebar({ history, onHistoryClick, onFileSelect, onLogout, setSelec
     };
 
     fetchOptions();
-  }, [apiUrl]);
+  }, [apiUrl, navigate]);
 
 
   const handleChange = (selected) => {
     setSelectedOptions(selected);
-
-    // Send the selected files to the parent (Dashboard) component
     const selectedFiles = selected ? selected.map(option => option.value) : [];
     onFileSelect(selectedFiles);
   };
-
-  // const handleLogout = async () => {
-  //   try {
-  //     const response = await fetch(`${apiUrl}api/logout/`, {
-  //       method: 'POST',
-  //       headers: {
-  //         'Content-Type': 'application/json',
-  //         'Authorization': `Bearer ${sessionStorage.getItem('authToken')}`,
-  //       },
-  //       body: JSON.stringify({
-  //         refresh: sessionStorage.getItem('refreshToken'),
-  //       }),
-  //     });
-
-  //     if (response.ok) {
-  //       sessionStorage.removeItem('authToken');
-  //       sessionStorage.removeItem('refreshToken');
-  //       navigate('/login');
-  //     } else {
-  //       console.error('Logout failed');
-  //     }
-  //   } catch (error) {
-  //     console.error('Error during logout:', error);
-  //   }
-  // };
 
   const handleLogout = async () => {
     try {
@@ -104,188 +72,170 @@ function LeftSidebar({ history, onHistoryClick, onFileSelect, onLogout, setSelec
       });
 
       if (response.ok) {
+        sessionStorage.removeItem('authToken');
+        sessionStorage.removeItem('refreshToken');
+        sessionStorage.clear();
 
-      } else {
-
+        onLogout();
+        navigate('/login');
       }
     } catch (error) {
       console.error('Error during logout:', error);
-    } finally {
-      // Clear session storage
-      sessionStorage.removeItem('authToken');
-      sessionStorage.removeItem('refreshToken');
-      sessionStorage.clear();
-
-      // Update parent state via onLogout and navigate to login
-      onLogout();
-      navigate('/login'); // Ensures user is redirected to login page
     }
   };
 
-  const [folderTree, setFolderTree] = useState({});
-  const [currentPath, setCurrentPath] = useState([]); // Tracks the current folder path
-  const [subfolders, setSubfolders] = useState([]); // Subfolders for the current path
-  const [filteredSubfolders, setFilteredSubfolders] = useState([]); // Filtered folders for search
-  const [inputValue, setInputValue] = useState(""); // The input field showing the full path
-  const [error, setError] = useState(null); // For any errors
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false); // Tracks dropdown visibility
 
-  // Build folder tree utility
-  const buildFolderTree = (folderArray) => {
-    const tree = {};
+  const [folderOptions, setFolderOptions] = useState([]);
 
-    folderArray.forEach((path) => {
-      const parts = path.split("/").filter((part) => part !== "");
-      let currentLevel = tree;
-
-      parts.forEach((part) => {
-        if (!currentLevel[part]) {
-          currentLevel[part] = {};
-        }
-        currentLevel = currentLevel[part];
-      });
-    });
-
-    return tree;
-  };
-
-  // Get subfolders utility
-  const getSubfolders = (tree, pathArray) => {
-    let currentLevel = tree;
-    for (const part of pathArray) {
-      currentLevel = currentLevel[part] || {};
-    }
-    return Object.keys(currentLevel);
-  };
-
-  // Fetch folder structure from the backend with token
+  
   useEffect(() => {
-    const fetchFolders = async () => {
-      try {
-        const token = sessionStorage.getItem("authToken");
-        if (!token) {
-          throw new Error("No authentication token found");
-        }
+    fetchFiles();
+  },[]);
 
-        const response = await fetch(`${apiUrl}/api/folder_name/`, {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`, // Pass the token in the header
-          },
-        });
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const data = await response.json();
-
-        if (!data.folder || !Array.isArray(data.folder)) {
-          throw new Error("Invalid folder data format");
-        }
-
-        const tree = buildFolderTree(data.folder);
-        setFolderTree(tree);
-        setSubfolders(Object.keys(tree)); // Initially show the top-level folders
-        setFilteredSubfolders(Object.keys(tree)); // Initialize filtered subfolders
-      } catch (err) {
-        setError(err.message);
-      }
-    };
-
-    fetchFolders();
-  }, [apiUrl]);
-
-  const handleSelectFolder = (folder) => {
-    const newPath = [...currentPath, folder];
-    const updatedPath = newPath.join("/") + "/"; // Append '/' to the end
-    setCurrentPath(newPath);
-    setInputValue(updatedPath); // Update the input field with the selected path
-    const updatedSubfolders = getSubfolders(folderTree, newPath); // Update the subfolder list
-    setSubfolders(updatedSubfolders);
-    setFilteredSubfolders(updatedSubfolders);
-    setIsDropdownOpen(true); // Ensure dropdown remains open after selection
-    setSelectedFolderPath(updatedPath);
-  };
-
-  // Handle resetting the path
-  const handleReset = () => {
-    setCurrentPath([]);
-    setInputValue("");
-    setSubfolders(Object.keys(folderTree)); // Reset to the top-level folders
-    setFilteredSubfolders(Object.keys(folderTree)); // Reset filtered subfolders
-    setIsDropdownOpen(false); // Close the dropdown
-  };
-
-  // Handle input click to toggle the dropdown
-  const handleInputClick = () => {
-    setFilteredSubfolders(getSubfolders(folderTree, currentPath)); // Update subfolders
-    setIsDropdownOpen((prev) => !prev); // Toggle dropdown visibility
-  };
-
-  // Handle input typing to filter subfolders
-  const handleInputChange = (e) => {
-    const value = e.target.value;
-    setInputValue(value);
-    // setSelectedFolderPath(value);
-
-    const filtered = subfolders.filter((folder) =>
-      folder.toLowerCase().includes(value.toLowerCase())
-    );
-    setFilteredSubfolders(filtered);
-    setIsDropdownOpen(true); // Show dropdown when typing
+  const fetchFiles = async () => {
+    try {
+      const response = await fetch(`${apiUrl}api/get-folder/`, {
+        headers: {
+          "Authorization": `Bearer ${sessionStorage.getItem("authToken")}`,
+        },
+      });
+      const data = await response.json();
+      setFolderOptions(buildTree(data.files));
+    } catch (error) {
+      console.error("Error fetching files:", error);
+    }
   };
 
   
+
+  const buildTree = (paths) => {
+    const root = {};
+
+    paths.forEach((path) => {
+      const parts = path.split("/").filter(Boolean);
+      let current = root;
+
+      parts.forEach((part) => {
+        if (!current[part]) {
+          current[part] = {};
+        }
+        current = current[part];
+      });
+    });
+
+    const convertToCascaderOptions = (obj) =>
+      Object.keys(obj).map((key) => ({
+        value: key,
+        label: key,
+        children: Object.keys(obj[key]).length ? convertToCascaderOptions(obj[key]) : [],
+      }));
+
+    return convertToCascaderOptions(root);
+  };
+
+  const handleFolderChange = (value) => {
+    console.log("Selected Path:", "/" + value.join("/"));
+  };
+
+  // const [folderStructure, setFolderStructure] = useState({});
+  // const [selectedPath, setSelectedPath] = useState(""); 
+  // const [folderOptions, setFolderOptions] = useState([]); 
+  // const [currentPath, setCurrentPath] = useState([]); 
+
+  // useEffect(() => {
+  //   fetchDirectories();
+  // }, []);
+
+  // const fetchDirectories = async () => {
+  //   try {
+  //     const response = await fetch(`${apiUrl}/api/get-folder/`, {
+  //       headers: {
+  //         Authorization: `Bearer ${sessionStorage.getItem("authToken")}`,
+  //       },
+  //     });
+
+  //     const data = await response.json();
+  //     const nestedFolders = formatFilesToFolders(data.files);
+  //     setFolderStructure(nestedFolders);
+  //     setFolderOptions(getOptions(nestedFolders, []));
+  //   } catch (error) {
+  //     console.error("Error fetching files:", error);
+  //   }
+  // };
+
+  // const formatFilesToFolders = (files) => {
+  //   const root = {};
+
+  //   files.forEach((file) => {
+  //     const parts = file.split("/").filter(Boolean);
+  //     let current = root;
+
+  //     parts.forEach((part, index) => {
+  //       if (!current[part]) {
+  //         current[part] = index === parts.length - 1 ? null : {};
+  //       }
+  //       current = current[part];
+  //     });
+  //   });
+
+  //   return root;
+  // };
+
+  // const getOptions = (obj, path) => {
+  //   return Object.keys(obj).map((key) => ({
+  //     value: key,
+  //     label: key,
+  //   }));
+  // };
+
+  // const handleFolderChange = (selectedOption) => {
+  //   if (!selectedOption) return;
+
+  //   const newPath = [...currentPath, selectedOption.value];
+  //   setCurrentPath(newPath);
+  //   setSelectedPath(newPath.join("/")); 
+
+  //   let current = folderStructure;
+  //   for (let part of newPath) {
+  //     current = current[part];
+  //   }
+
+  //   if (current && typeof current === "object") {
+  //     setFolderOptions(getOptions(current, newPath));
+  //   } else {
+  //     setFolderOptions([]);
+  //   }
+  // };
+
+  // const handleClear = () => {
+  //   setSelectedPath("");
+  //   setCurrentPath([]);
+  //   setFolderOptions(getOptions(folderStructure, [])); 
+  // };
+
 
   return (
     <div className="left-sidebar">
       <div className="new">
         <img src="/images/L&T PES - Linear Logo - Black.jpg" alt="A descriptive alt text" className='lnt-logo' />
       </div>
-      
-{/* 
-      <div className="folder-selector-container">
-      <h3 className="folder-selector-heading">Choose Folder</h3>
 
-      {error && <div className="error-message">Error: {error}</div>}
+      {/* <div>
+        <h2>Select Folder</h2>
+        <Cascader options={folderOptions} onChange={handleFolderChange} placeholder="Select a folder" />
+      </div>  */}
 
-      <div className="input-container">
-        <input
-          type="text"
-          value={inputValue}
-          onChange={handleInputChange} // Handle typing and search
-          placeholder="Select a folder"
-          onClick={handleInputClick} // Toggle dropdown on click
-          className="folder-input"
-        />
-
-        {inputValue && (
-          <span onClick={handleReset} className="reset-icon">
-            &times;
-          </span>
-        )}
-      </div>
-
-      {isDropdownOpen && filteredSubfolders.length > 0 && (
-        <div className="dropdown-container">
-          {filteredSubfolders.map((folder) => (
-            <div
-              key={folder}
-              className="folder-item"
-              onClick={() => handleSelectFolder(folder)} // Select the folder
-            >
-              {folder}
-            </div>
-          ))}
-        </div>
-      )}
+{/* <div>
+      <h3>Select Folder:</h3>
+      <Select
+        options={folderOptions}
+        onChange={handleFolderChange}
+        placeholder="Select a folder"
+        value={selectedPath ? { label: selectedPath, value: selectedPath } : null}
+        isClearable
+        onMenuClose={handleClear} // This allows clearing when clicking "x"
+      />
     </div> */}
-
-
-
-
-
 
       <div className="multi-select">
         <Select
@@ -298,17 +248,11 @@ function LeftSidebar({ history, onHistoryClick, onFileSelect, onLogout, setSelec
         />
       </div>
 
-      {/* <label className="custom-file-input">
-        <FontAwesomeIcon icon={faCloudArrowUp} className="upload" />
-        Upload document
-        <input type="file" />
-      </label> */}
-
       <div className="history-section">
         <h4>Today</h4>
         <ul>
           {history.today.map((item) => (
-            <li key={item.id} onClick={() => onHistoryClick(item.session_id)}>
+            <li key={item.id} onClick={() => onHistoryClick(item.session_id)} title={item.prompt}>
               <FontAwesomeIcon icon={faHistory} className="history-icon" />
               {item.prompt}
             </li>
@@ -318,7 +262,7 @@ function LeftSidebar({ history, onHistoryClick, onFileSelect, onLogout, setSelec
         <h4>Yesterday</h4>
         <ul>
           {history.yesterday.map((item) => (
-            <li key={item.id} onClick={() => onHistoryClick(item.session_id)}>
+            <li key={item.id} onClick={() => onHistoryClick(item.session_id)} title={item.prompt}>
               <FontAwesomeIcon icon={faHistory} className="history-icon" />
               {item.prompt}
             </li>
@@ -328,7 +272,7 @@ function LeftSidebar({ history, onHistoryClick, onFileSelect, onLogout, setSelec
         <h4>Last Week</h4>
         <ul>
           {history.last_week.map((item) => (
-            <li key={item.id} onClick={() => onHistoryClick(item.session_id)}>
+            <li key={item.id} onClick={() => onHistoryClick(item.session_id)} title={item.prompt}>
               <FontAwesomeIcon icon={faHistory} className="history-icon" />
               {item.prompt}
             </li>
@@ -338,7 +282,7 @@ function LeftSidebar({ history, onHistoryClick, onFileSelect, onLogout, setSelec
         <h4>Last Month</h4>
         <ul>
           {history.last_month.map((item) => (
-            <li key={item.id} onClick={() => onHistoryClick(item.session_id)}>
+            <li key={item.id} onClick={() => onHistoryClick(item.session_id)} title={item.prompt}>
               <FontAwesomeIcon icon={faHistory} className="history-icon" />
               {item.prompt}
             </li>
@@ -357,27 +301,17 @@ function LeftSidebar({ history, onHistoryClick, onFileSelect, onLogout, setSelec
           />
           <span className="user-name">{userName || 'Guest'}</span>
           <div className="user-actions">
-            
-              {/* Dark Mode Toggle with Tooltip */}
-              <div className="icon-with-tooltip">
-                <FontAwesomeIcon
-                  icon={isDarkMode ? faSun : faMoon}
-                  className="user-icon"
-                  onClick={toggleDarkMode}
-                />
-                <span className="tooltip-text">{isDarkMode ? "Light Mode" : "Dark Mode"}</span>
-              </div>
 
-              {/* Logout Icon with Tooltip */}
-              <div className="icon-with-tooltip">
-                <FontAwesomeIcon
-                  icon={faSignOutAlt}
-                  className="user-icon"
-                  onClick={handleLogout}
-                />
-                <span className="tooltip-text">Logout</span>
-              </div>
-           
+            {/* Logout Icon with Tooltip */}
+            <div className="icon-with-tooltip">
+              <FontAwesomeIcon
+                icon={faSignOutAlt}
+                className="user-icon"
+                onClick={handleLogout}
+              />
+              <span className="tooltip-text">Logout</span>
+            </div>
+
 
           </div>
         </div>

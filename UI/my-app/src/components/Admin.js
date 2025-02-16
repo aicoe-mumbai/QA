@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import FileList from "./FileList"; // Import the FileList component
+import { useNavigate } from "react-router-dom";
+import FileList from "./FileList";
 import "./Admin.css";
 import MilvusTable from "./MilvusTable";
 import ChooseCollection from "./ChooseCollection";
@@ -11,13 +12,12 @@ const AdminDashboard = () => {
   const [showModal, setShowModal] = useState(false);
   const [isCreatingCollection, setIsCreatingCollection] = useState(false);
   const [newCollectionName, setNewCollectionName] = useState("");
-  const [collectionType, setCollectionType] = useState("folder");
-  const [selectedFiles, setSelectedFiles] = useState([]);
   const [isEditMode, setIsEditMode] = useState(false);
   const [progress, setProgress] = useState(""); // For real-time progress display
   const [isViewingDetails, setIsViewingDetails] = useState(false);
   const apiUrl = process.env.REACT_APP_API_URL;
   const [source, setSource] = useState("");
+  const navigate = useNavigate();
 
 
   useEffect(() => {
@@ -46,13 +46,18 @@ const AdminDashboard = () => {
         setCollections(data.collections);
       } catch (error) {
         console.error("Error fetching collections:", error);
+        alert("Some error occurred. Please login again.");
+        sessionStorage.removeItem('authToken');
+        sessionStorage.removeItem('refreshToken');
+        sessionStorage.clear();
+        navigate("/login");
       } finally {
         setLoading(false);
       }
     };
 
     fetchCollections();
-  }, []);
+  }, [apiUrl, navigate]);
 
   const fetchCollections = async () => {
     setLoading(true);
@@ -79,6 +84,11 @@ const AdminDashboard = () => {
       setCollections(data.collections);
     } catch (error) {
       console.error("Error fetching collections:", error);
+      alert("Some error occurred. Please login again.");
+      sessionStorage.removeItem('authToken');
+      sessionStorage.removeItem('refreshToken');
+      sessionStorage.clear();
+      navigate("/login");
     } finally {
       setLoading(false);
     }
@@ -96,7 +106,7 @@ const AdminDashboard = () => {
   const handleDetails = (collection) => {
     setSelectedCollection(collection);
     setIsViewingDetails(true);
-    setIsEditMode(false); 
+    setIsEditMode(false);
     setShowModal(true);
     setIsCreatingCollection(false);
 
@@ -108,7 +118,7 @@ const AdminDashboard = () => {
     setIsCreatingCollection(false);
     setShowModal(true);
   };
-  
+
   const handleDelete = async (collectionName) => {
     if (window.confirm(`Are you sure you want to delete ${collectionName}?`)) {
       const token = sessionStorage.getItem("authToken");
@@ -143,12 +153,6 @@ const AdminDashboard = () => {
     }
   };
 
-  const handleFileSelection = (e) => {
-    const files = Array.from(e.target.files);
-    setSelectedFiles(files);
-    console.log(selectedFiles);
-  };
-
   const handleCreateCollection = async (e) => {
     e.preventDefault();
     setShowModal(false);
@@ -164,15 +168,13 @@ const AdminDashboard = () => {
       return;
     }
 
-   
-
     try {
       const formData = new FormData();
       formData.append("name", newCollectionName);
       formData.append("source", source);
-      
-       // Poll for progress updates
-       const progressInterval = setInterval(async () => {
+
+      // Poll for progress updates
+      const progressInterval = setInterval(async () => {
         const progressResponse = await fetch(
           `${apiUrl}/api/collections/progress/`,
           {
@@ -185,20 +187,19 @@ const AdminDashboard = () => {
 
         if (progressResponse.ok) {
           const progressData = await progressResponse.json();
-          setProgress(progressData.message); // Update progress message
+          setProgress(progressData.message);
           if (progressData.message.includes("Upload completed.")) {
-            clearInterval(progressInterval); // Stop polling when done
+            clearInterval(progressInterval);
             alert("Collection processing is complete.");
-            setProgress(""); // Clear progress
-            setNewCollectionName(""); // Reset collection name
-            setSelectedFiles([]); // Clear selected files
-            await fetchCollections(); // Refresh collections list
+            setProgress("");
+            setNewCollectionName("");
+            await fetchCollections();
           }
         } else {
-          clearInterval(progressInterval); // Stop polling in case of error
+          clearInterval(progressInterval);
           alert("Error fetching progress updates.");
         }
-      }, 1000);
+      }, 5000);
 
       alert("Collection is being processed. Check progress.");
 
@@ -220,12 +221,10 @@ const AdminDashboard = () => {
         return;
       }
 
-     
     } catch (error) {
       console.error("Error creating collection:", error);
     }
   };
-
 
   return (
     <div className="admin-dashboard">
@@ -300,17 +299,17 @@ const AdminDashboard = () => {
                 <lable>
                   Source:
                   <input
-                      type="text"
-                      className="create-source-input"
-                      value={source}
-                      onChange={(e) => setSource(e.target.value)} // Track source input
-                      required
-                   
+                    type="text"
+                    className="create-source-input"
+                    value={source}
+                    onChange={(e) => setSource(e.target.value)}
+                    required
+
                   />
                 </lable>
-               
+
                 <br />
-              
+
                 <div className="modal-actions">
                   <button type="button" className="cancel-btn" onClick={() => setShowModal(false)}>
                     Cancel
@@ -319,14 +318,13 @@ const AdminDashboard = () => {
                 </div>
               </form>
             ) : (
-              // Conditionally render FileList or MilvusTable based on view mode
               <div>
-               
+
                 {isEditMode ? (
                   <FileList
                     collectionName={selectedCollection}
                     onClose={() => setShowModal(false)}
-                    editMode={true} // Enable edit functionalities
+                    editMode={true}
                     setProgress={setProgress}
                   />
                 ) : isViewingDetails ? (
@@ -341,7 +339,7 @@ const AdminDashboard = () => {
                   <FileList
                     collectionName={selectedCollection}
                     onClose={() => setShowModal(false)}
-                    editMode={false} // View-only mode
+                    editMode={false}
                   />
                 )}
 

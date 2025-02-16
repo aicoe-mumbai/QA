@@ -1,41 +1,63 @@
+
 import React, { useState, useEffect } from "react";
 import "./ChooseCollection.css";
+import { useNavigate } from "react-router-dom";
 
 
 const ChooseCollection = () => {
   const [collections, setCollections] = useState([]);
   const [selectedCollection, setSelectedCollection] = useState("");
-  const [currentCollection, setCurrentCollection] = useState(""); // State to store the current collection
+  const [currentCollection, setCurrentCollection] = useState("");
   const [loading, setLoading] = useState(false);
-
-  // Retrieve the token from sessionStorage
+  const navigate = useNavigate();
   const token = sessionStorage.getItem("authToken");
 
-  // Fetch collections from your Milvus API
   useEffect(() => {
     const fetchCollections = async () => {
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/collections/`, {
-        headers: {
-          "Authorization": `Bearer ${token}`, // Add token in the header
-        },
-      });
-      const data = await response.json();
-      setCollections(data.collections); // Assuming response has a `collections` array
+      try {
+        const response = await fetch(`${process.env.REACT_APP_API_URL}/api/collections/`, {
+          headers: {
+            "Authorization": `Bearer ${token}`, 
+          },
+        });
+        if (!response.ok) {
+          throw new Error("Failed to fetch collections.");
+        }
+        const data = await response.json();
+        setCollections(data.collections); 
+      } catch (error) {
+        alert("Some error occurred. Please login again.");
+        sessionStorage.removeItem('authToken');
+        sessionStorage.removeItem('refreshToken');
+        sessionStorage.clear();
+        navigate("/login");
+      }
     };
 
     const fetchCurrentCollection = async () => {
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/current-using-collection/`, {
-        headers: {
-          "Authorization": `Bearer ${token}`, // Add token in the header
-        },
-      });
-      const data = await response.json();
-      setCurrentCollection(data.current_using_collection || "No collection selected");
+      try {
+        const response = await fetch(`${process.env.REACT_APP_API_URL}/api/current-using-collection/`, {
+          headers: {
+            "Authorization": `Bearer ${token}`,
+          },
+        });
+        if (!response.ok) {
+          throw new Error("Failed to fetch current collection.");
+        }
+        const data = await response.json();
+        setCurrentCollection(data.current_using_collection || "No collection selected");
+      } catch (error) {
+        alert("Some error occurred. Please login again.");
+        sessionStorage.removeItem('authToken');
+        sessionStorage.removeItem('refreshToken');
+        sessionStorage.clear();
+        navigate("/login");
+      }
     };
 
     fetchCollections();
     fetchCurrentCollection();
-  }, [token]); // Re-run the effect if token changes
+  }, [token, navigate]); 
 
   // Handle dropdown change
   const handleCollectionChange = (e) => {
@@ -55,18 +77,17 @@ const ChooseCollection = () => {
 
     if (userConfirmed) {
       try {
-        // Send the selected collection to the backend to update the current collection
         const response = await fetch(`${process.env.REACT_APP_API_URL}/api/update-current-collection/`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "Authorization": `Bearer ${token}`, // Add token in the header
+            "Authorization": `Bearer ${token}`, 
           },
           body: JSON.stringify({ current_using_collection: selectedCollection }),
         });
 
         if (response.ok) {
-          setCurrentCollection(selectedCollection); // Update current collection state
+          setCurrentCollection(selectedCollection);
           alert("Successfully changed collection!");
         } else {
           alert("Failed to change collection. Please try again.");
@@ -78,27 +99,22 @@ const ChooseCollection = () => {
   };
   const restartServer = async () => {
     try {
-      // Ask for confirmation before proceeding
       const userConfirmed = window.confirm("Are you sure you want to restart the server?");
   
       if (!userConfirmed) {
         alert("Server restart canceled.");
-        return; // Stop the function if the user cancels
+        return; 
       }
-  
-      // Retrieve the token from sessionStorage
-      const token = sessionStorage.getItem('authToken');
-    
+      
       if (!token) {
         alert("No authentication token found. Please log in again.");
         return;
       }
       setLoading(true);
-      // Make the API call to restart the server
       const response = await fetch(`${process.env.REACT_APP_API_URL}/api/restart-server/`, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${token}`, // Add token in the header
+          'Authorization': `Bearer ${token}`,
         },
       });
     
@@ -158,8 +174,12 @@ const ChooseCollection = () => {
     <button className="button restart-button" onClick={restartServer}>
       Restart Server
     </button>
+
+    <button className="dashboard-btn" onClick={() => navigate("/dashboard")}>
+          Go to Dashboard
+        </button>
   </div>
-</div>
+</div> 
 
 
     </div>

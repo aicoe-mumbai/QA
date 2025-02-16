@@ -14,9 +14,9 @@ function ChatControls({ prompt, handleInputChange, handleKeyPress, handleSendPro
           placeholder="Send a message..." 
           className="message-input" 
           value={prompt}
-          onChange={handleInputChange} 
+          onChange={handleInputChange}  
           onKeyDown={handleKeyPress} 
-          style={{ maxHeight: '200px', overflowY: 'auto', resize: 'none' }} // Scroll after 5 lines
+          style={{ maxHeight: '200px', overflowY: 'auto', resize: 'none' }} 
           rows={1}
         />
         <button className="send-button" onClick={() => handleSendPrompt(prompt)}> <FontAwesomeIcon icon={faPaperPlane} /></button>

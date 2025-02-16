@@ -2,9 +2,6 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './Login.css';
 
-import './Login.css';
-
-
 function Login({ onLogin }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -12,7 +9,6 @@ function Login({ onLogin }) {
   const navigate = useNavigate();
   const apiUrl = process.env.REACT_APP_API_URL;
   
-
   const handleLogin = async (e) => {
     e.preventDefault();
     try {
@@ -27,24 +23,17 @@ function Login({ onLogin }) {
       }
 
       const data = await response.json();
-      
-      // Ensure these keys match the keys in your backend response
       sessionStorage.setItem('authToken', data.access);  
       sessionStorage.setItem('refreshToken', data.refresh); 
       sessionStorage.setItem('userName', data.username);
       onLogin();
-      // Navigate to the dashboard
-      if (data.username === 'admin') {
-        navigate('/admin');
-      } else {
-        navigate('/dashboard');
-      }
+      navigate('/dashboard');
     } catch (error) {
       setError('Invalid credentials');
       console.error('Error during login:', error);
     }
-  };
-
+  }; 
+ 
   return (
     <div className="login-page">
       <div className="login-container">

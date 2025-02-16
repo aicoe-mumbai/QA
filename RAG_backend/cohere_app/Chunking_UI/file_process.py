@@ -244,7 +244,7 @@ def create_langchain_documents(found_files, collection_name):
         if text_by_page:
             chunks = read_and_split_text(text_by_page)
             logger.info(f"current processing file {file} with {len(str(chunks))}")
-            if len(str(chunks)) > 5:
+            if len(str(chunks)) > 3:
                 for chunk, page_num in chunks:
                     documents = []
                     doc = Document(page_content=chunk, metadata={'source': ocr_file, 'page': str(page_num)})

@@ -29,14 +29,6 @@ function PromptResponseCard({ item, index, editingIndex, setEditingIndex, handle
     }
   };
 
-  // const handleThumbsUpClick = () => {
-  //   setIsThumbsUpActive(!isThumbsUpActive);
-  //   if (isThumbsDownActive) {
-  //     setIsThumbsDownActive(false);
-  //     setIsCommentSubmitted(false);
-  //   }
-  // };
-
   const handleThumbsUpClick = async () => {
     setIsThumbsUpActive(true);
     if (isThumbsDownActive) {
@@ -46,16 +38,17 @@ function PromptResponseCard({ item, index, editingIndex, setEditingIndex, handle
     const token = sessionStorage.getItem('authToken');
 
     try {
-      const response = await fetch(`${apiUrl}api/mark_satisfied/${item.id}/`, {
+      const status = "satisfied"
+      const response = await fetch(`${apiUrl}api/mark_satisfied_or_unsatisfied/${item.id}/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
-        }
+        },
+        body: JSON.stringify({ status })
       });
 
       if (response.ok) {
-        const data = await response.json();
       } else {
         console.error('Failed to mark as satisfied:', response.statusText);
       }
@@ -64,19 +57,6 @@ function PromptResponseCard({ item, index, editingIndex, setEditingIndex, handle
     }
   };
 
-  // const handleThumbsDownClick = () => {
-  //   if (isThumbsDownActive) {
-  //     // If thumbs down is already active, deactivate it
-  //     setIsThumbsDownActive(false);
-  //   } else {
-  //     // Set thumbs down active and reset the thumbs up state
-  //     setIsThumbsDownActive(true);
-  //     setIsThumbsUpActive(false); // Reset thumbs up if thumbs down is clicked
-  //   }
-
-  //   setIsCommentSubmitted(false); // Reset comment state whenever thumbs down is clicked
-  // };
-
   const handleThumbsDownClick = async () => {
     setIsThumbsDownActive(true);
     setIsThumbsUpActive(false);
@@ -84,12 +64,14 @@ function PromptResponseCard({ item, index, editingIndex, setEditingIndex, handle
     const token = sessionStorage.getItem('authToken');
 
     try {
-      const response = await fetch(`${apiUrl}/api/mark_unsatisfied/${item.id}/`, {
+      const status = "unsatisfied"
+      const response = await fetch(`${apiUrl}/api/mark_satisfied_or_unsatisfied/${item.id}/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
-        }
+        },
+        body: JSON.stringify({ status })
       });
 
       if (response.ok) {
@@ -118,9 +100,8 @@ function PromptResponseCard({ item, index, editingIndex, setEditingIndex, handle
       });
 
       if (response.ok) {
-        const data = await response.json();
-        setIsCommentSubmitted(true); // Mark comment as submitted
-        setComment(''); // Clear the input
+        setIsCommentSubmitted(true);
+        setComment('');
       } else {
         console.error('Failed to submit comment:', response.statusText);
       }
@@ -129,24 +110,35 @@ function PromptResponseCard({ item, index, editingIndex, setEditingIndex, handle
     }
   };
 
+
   const handlePdfClick = async (fileName, pageNumber) => {
-    const encodedFileName = encodeURIComponent(fileName);
     const token = sessionStorage.getItem('authToken');
 
+    const encodedFileName = encodeURIComponent(fileName);
     try {
-      // API call to get the PDF from the backend
-      const response = await fetch(`${apiUrl}/api/serve-pdf${encodedFileName}/${pageNumber}/`, {
-        method: 'POST',
+      const response = await fetch(`${apiUrl}/api/serve-file/${encodedFileName}/${pageNumber}/`, {
+        method: 'GET',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
+
         },
       });
 
       if (response.ok) {
         const blob = await response.blob();
-        const pdfUrl = URL.createObjectURL(blob);
-        window.open(pdfUrl, '_blank');
+        const fileUrl = URL.createObjectURL(blob);
+
+        if (fileName.endsWith(".pdf") || fileName.endsWith(".docx")) {
+          window.open(`${fileUrl}#page=${pageNumber}`, '_blank');
+        } else {
+          const link = document.createElement('a');
+          link.href = fileUrl;
+          link.download = fileName;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        }
       } else {
         console.error("Error fetching PDF:", response.statusText);
       }
@@ -155,66 +147,45 @@ function PromptResponseCard({ item, index, editingIndex, setEditingIndex, handle
     }
   };
 
+  const processResponseLinks = (responseText) => {
+    return responseText.split('\n\n').map((part, index) => {
+      const updatedPart = part.split(/(Source:\s.*?\.[a-zA-Z0-9]+ \| Page:\s\d+)/gi).map((chunk, idx) => {
+        const sourceMatch = chunk.match(/Source:\s(.*?)\s?\| Page:\s(\d+)/i);
 
-const processResponseLinks = (responseText) => {
-  return responseText.split('\n\n').map((part, index) => {
-    const updatedPart = part.split(/(Source: .*?[\w\s\-_]+\.pdf \| Page: \d+)/g).map((chunk, idx) => {
-      const sourceMatch = chunk.match(/Source: (.*?\.pdf) \| Page: (\d+)/);
-      if (sourceMatch) {
-        const [_, filePath, pageNumber] = sourceMatch;
-        
-        // Encode the full filepath
-        const encodedFilePath = encodeURIComponent(filePath);
-        
-        return (
-          <a 
-            key={filePath + pageNumber} 
-            href={`/api/serve-pdf/${encodedFilePath}/${pageNumber}/`} 
-            onClick={(e) => {
-              e.preventDefault();
-              handlePdfClick(filePath, pageNumber);
-            }}
-          >
-            {chunk}
-          </a>
-        );
-      }
-      return chunk;
+        if (sourceMatch) {
+          const [, filePath, pageNumber] = sourceMatch;
+
+          const fileName = filePath.split('/').pop();
+          const displayText = `Source: ${fileName} - Page: ${pageNumber}`;
+          const encodedFileName = encodeURIComponent(filePath);
+
+          return (
+            <div key={fileName + pageNumber}>
+
+              <a
+                key={fileName + pageNumber}
+                href={`/api/serve-file/${encodedFileName}/${pageNumber}/`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  handlePdfClick(fileName, pageNumber);
+                }}
+              >
+                {displayText}
+              </a>
+            </div>
+          );
+        }
+        return chunk;
+      });
+
+      return (
+        <span key={index}>
+          {updatedPart}
+          {index !== responseText.split('\n\n').length - 1 && <br />}
+        </span>
+      );
     });
-    return (
-      <span key={index}>
-        {updatedPart}
-        {index !== responseText.split('\n\n').length - 1 && <br />}
-      </span>
-    );
-  });
-};
-
-
-//   const processResponseLinks = (responseText) => {
-//     const sourceParts = responseText.split('Source:').slice(1);
-    
-//     return sourceParts.map((part, index) => {
-//         const fileMatch = part.match(/(.*?\.pdf)\s*\|\s*Page:\s*(\d+)/);
-        
-//         if (fileMatch) {
-//             const filePath = fileMatch[1].trim();
-//             const pageNumber = fileMatch[2].trim();
-//             const fullSourceText = `Source:${part}`;
-            
-//             return (
-//                 <span key={index}>
-//                     <a href="#" onClick={() => handlePdfClick(filePath, pageNumber)}>
-//                         {fullSourceText}
-//                     </a>
-//                     {index !== sourceParts.length - 1 && <br />}
-//                 </span>
-//             );
-//         }
-        
-//         return null;
-//     }).filter(link => link !== null);
-// };
+  };
 
 
   return (
@@ -247,6 +218,7 @@ const processResponseLinks = (responseText) => {
       />
 
       <div className="response-card">
+
         <p>
           {item.response ? (
             processResponseLinks(item.response)
@@ -254,27 +226,18 @@ const processResponseLinks = (responseText) => {
             'Loading...'
           )}
         </p>
+        <div className="pdf-button-container">
 
-        {/* <button onClick={() => onSendPrompt("Continue")} >Continue</button>
-
-        <button className='pdf-button' onClick={handlePdfClick}>
-          Click to open PDF
-        </button> */}
-        {/* <div className="pdf-button-container">
-        
           <div className="continue-container">
             <FontAwesomeIcon icon={faArrowDown} className="arrow-icon" />
-            <a
-              href="#"
+            <button
               className="continue-link"
-              // onClick={(e) => {
-              //   e.preventDefault(); // Prevent default anchor behavior (page reload)
-              //   onSendPrompt("Continue"); // Trigger your onSendPrompt function
-              // }}
+              onClick={() => onSendPrompt("Continue")}
             >
-            </a>
+              Continue
+            </button>
           </div>
-        </div> */}
+        </div>
 
 
         <div className='thumps'>
@@ -282,7 +245,6 @@ const processResponseLinks = (responseText) => {
             {showCopyIcon ? (
               <div className="tooltip">
                 <FontAwesomeIcon icon={faCopy} />
-                {/* <span className="tooltiptext">Copy</span> */}
               </div>
             ) : (
               <span className="copied-message">Copied!</span>
@@ -308,12 +270,6 @@ const processResponseLinks = (responseText) => {
           </div>
         )}
       </div>
-
-      {/* {item.response && item.response !== 'Loading...' && (
-        <div>
-          <button onClick={() => onSendPrompt("Continue")}>Continue</button>
-        </div>
-      )} */}
     </div>
   );
 }

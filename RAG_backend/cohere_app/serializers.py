@@ -5,7 +5,7 @@ from .models import PromptHistory,CurrentUsingCollection
 class PromptHistorySerializer(serializers.ModelSerializer):
     class Meta:
         model = PromptHistory
-        fields = ['id', 'session_id', 'prompt', 'response', 'created_at']  # Include any other fields you need
+        fields = ['id', 'session_id', 'prompt', 'response', 'created_at'] 
 
 
 class CurrentUsingCollectionSerializer(serializers.ModelSerializer):

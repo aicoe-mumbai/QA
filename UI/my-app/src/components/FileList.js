@@ -1,16 +1,16 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import "./FileList.css";
 
 const FileList = ({ collectionName, onClose, editMode, setProgress }) => {
-  const [files, setFiles] = useState([]); // List of files
-  const [loading, setLoading] = useState(false); // Loading state
-  const [searchQuery, setSearchQuery] = useState(""); // Search input
-  const [filteredFiles, setFilteredFiles] = useState([]); // Filtered files
-  const [selectedFiles, setSelectedFiles] = useState([]); // Selected files for upload
-  const apiUrl = process.env.REACT_APP_API_URL; // API base URL
+  const [files, setFiles] = useState([]);
+  const [loading, setLoading] = useState(false); 
+  const [searchQuery, setSearchQuery] = useState(""); 
+  const [filteredFiles, setFilteredFiles] = useState([]); 
+  const apiUrl = process.env.REACT_APP_API_URL; 
     const [source, setSource] = useState("");
+    const navigate = useNavigate();
   
-  // Fetch files from the backend
   useEffect(() => {
     const fetchFiles = async () => {
       setLoading(true);
@@ -38,10 +38,15 @@ const FileList = ({ collectionName, onClose, editMode, setProgress }) => {
         }
 
         const data = await response.json();
-        setFiles(data.results); // Save files to state
-        setFilteredFiles(data.results); // Initialize filtered files
+        setFiles(data.results); 
+        setFilteredFiles(data.results);
       } catch (error) {
         console.error("Error fetching files:", error);
+        alert("Some error occurred. Please login again.");
+        sessionStorage.removeItem('authToken');
+        sessionStorage.removeItem('refreshToken');
+        sessionStorage.clear();
+        navigate("/login");
       } finally {
         setLoading(false);
       }
@@ -49,8 +54,8 @@ const FileList = ({ collectionName, onClose, editMode, setProgress }) => {
 
     if (collectionName) {
       fetchFiles();
-    }
-  }, [collectionName]);
+    } 
+  }, [collectionName, apiUrl, navigate]);
 
   const fetchFiles = async () => {
     setLoading(true);
@@ -78,10 +83,15 @@ const FileList = ({ collectionName, onClose, editMode, setProgress }) => {
       }
 
       const data = await response.json();
-      setFiles(data.results); // Save files to state
-      setFilteredFiles(data.results); // Initialize filtered files
+      setFiles(data.results); 
+      setFilteredFiles(data.results); 
     } catch (error) {
       console.error("Error fetching files:", error);
+      alert("Some error occurred. Please login again.");
+      sessionStorage.removeItem('authToken');
+      sessionStorage.removeItem('refreshToken');
+      sessionStorage.clear();
+      navigate("/login");
     } finally {
       setLoading(false);
     }
@@ -97,19 +107,11 @@ const FileList = ({ collectionName, onClose, editMode, setProgress }) => {
       file.toLowerCase().includes(query)
     );
     setFilteredFiles(filtered);
-  };
-
-  // Common handler for file and folder selection
-  const handleFileOrFolderSelection = (e) => {
-    const fileList = Array.from(e.target.files); // Convert FileList to an array
-    setSelectedFiles((prevSelected) => [...prevSelected, ...fileList]); // Save selected files
-  };
+  }; 
 
   // Handle file upload
- 
   const handleFileUpload = async () => {
-   
-
+  
     if (!collectionName) {
       alert("Collection name is required.");
       return;
@@ -122,11 +124,10 @@ const FileList = ({ collectionName, onClose, editMode, setProgress }) => {
     }
 
     const formData = new FormData();
-    formData.append("name", collectionName); // Include collection name in form data
+    formData.append("name", collectionName); 
     formData.append("source", source);
 
     try {
-      // Poll for progress updates
       const progressInterval = setInterval(async () => {
         const progressResponse = await fetch(
           `${apiUrl}/api/collections/progress/`,
@@ -140,19 +141,18 @@ const FileList = ({ collectionName, onClose, editMode, setProgress }) => {
 
         if (progressResponse.ok) {
           const progressData = await progressResponse.json();
-          setProgress(progressData.message); // Update progress message
+          setProgress(progressData.message);
 
           if (progressData.message.includes("Upload completed.")) {
-            clearInterval(progressInterval); // Stop polling when done
+            clearInterval(progressInterval); 
             alert("Collection processing is complete.");
-            setProgress(""); // Clear progress
-            setSelectedFiles([]); // Clear selected files
+            setProgress("");
           }
         } else {
-          clearInterval(progressInterval); // Stop polling in case of error
+          clearInterval(progressInterval); 
           alert("Error fetching progress updates.");
         }
-      }, 1000);
+      }, 5000);
 
       alert("Collection is being processed. Check progress.");
 
@@ -171,7 +171,6 @@ const FileList = ({ collectionName, onClose, editMode, setProgress }) => {
       }
 
       alert("Files uploaded successfully");
-      setSelectedFiles([]); // Clear selected files
       fetchFiles();
     } catch (error) {
       console.error("Error uploading files:", error);
@@ -274,7 +273,7 @@ const FileList = ({ collectionName, onClose, editMode, setProgress }) => {
                 type="text"
                 className="input-source"
                 value={source}
-                onChange={(e) => setSource(e.target.value)} // Track source input
+                onChange={(e) => setSource(e.target.value)}
                 required
             />
           </div>
