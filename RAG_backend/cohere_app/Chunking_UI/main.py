@@ -8,6 +8,9 @@ from pymilvus import MilvusClient
 from enable_logging import logger, current_time
 import db_utility
 from datetime import datetime
+from dotenv import load_dotenv
+load_dotenv()
+Milvus_url = os.getenv("MILVUS_URL")
 
 def check():
     return db_utility.fetch_all_documents()
@@ -26,7 +29,7 @@ if(chunking_monitor == False):
     logger.ERROR("Error found at creation of chunking monitor table")
 
 client = MilvusClient(
-    uri="http://localhost:19530",
+    uri=Milvus_url,
     token="root:Milvus"
 )
 # connection and database table creation command

@@ -5,13 +5,19 @@ from langchain_core.documents import Document
 from pptx import Presentation
 from docx import Document as DocxDocument
 import openpyxl
-import csv
+import csv, os
 from langchain_community.vectorstores import Milvus
 from langchain_huggingface import HuggingFaceEmbeddings
 from .enable_logging import logger 
 from cohere_app.Chunking_UI import db_utility
 from doctr.io import DocumentFile
 from doctr.models import ocr_predictor
+from dotenv import load_dotenv
+
+load_dotenv()
+host = os.getenv("HOST")
+port = os.getenv("PORT")
+MILVUS_URL = os.getenv("MILVUS_URL")
 
 embeddings = HuggingFaceEmbeddings(model_name='sentence-transformers/all-MiniLM-L6-v2', model_kwargs={'device': "cuda"})
 model = ocr_predictor(pretrained=True)
@@ -224,7 +230,7 @@ def create_langchain_documents(found_files, collection_name):
 
                     if documents:
                         Milvus.from_documents(documents, embeddings, collection_name=collection_name,
-                                            connection_args={'uri': "http://localhost:19530"})
+                                            connection_args={'uri': MILVUS_URL})
             
                     
                 db_utility.insert_user_access(file, 'YES', message, collection_name)
@@ -251,7 +257,7 @@ def create_langchain_documents(found_files, collection_name):
                     documents.append(doc)
                     if documents:
                         Milvus.from_documents(documents, embeddings, collection_name=collection_name,
-                                            connection_args={'uri': "http://localhost:19530"})
+                                            connection_args={'uri': MILVUS_URL})
                 db_utility.update_ocr_status(ocr_file, collection_name)
         progress_percentage = (ocr_file_index + 1) / len(OCR_LIST) * 100
         yield {"progress_percentage": progress_percentage, "current_progress": ocr_file_index + 1, "total_files": len(OCR_LIST)}

@@ -24,11 +24,16 @@ from .api import process_query, get_all_files_from_milvus
 from .Chunking_UI import file_process, db_utility
 from .Chunking_UI.enable_logging import logger
 from urllib.parse import unquote
+from dotenv import load_dotenv
+load_dotenv()
 
-client = MilvusClient(uri="http://localhost:19530", token="root:Milvus")
+Milvus_url = os.getenv("MILVUS_URL")
+client = MilvusClient(uri= Milvus_url, token="root:Milvus")
 progress_data = {"message": "Starting upload..."}
 
 PDF_DIRECTORY = config('PDF_DIRECTORY')
+host = os.getenv("HOST")
+port = os.getenv("PORT")
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
@@ -321,7 +326,7 @@ def get_collection_name(request):
 def collection_files(request, collection_name):
     if request.method == 'GET':
         try:
-            connections.connect("default", host='localhost', port='19530')
+            connections.connect("default", host=host, port= port)
             collection = Collection(collection_name)
             iterator = collection.query_iterator(batch_size=1000, output_fields=["source"])
             results = []
@@ -366,7 +371,7 @@ def delete_file(request, source, collection_name):
            
             if not source or not collection_name:
                 return JsonResponse({"error": "Both 'source' and 'collection_name' are required"}, status=400)
-            connections.connect("default", host='localhost', port='19530')
+            connections.connect("default", host=host, port= port)
             collection = Collection(collection_name)
             decoded_source = urllib.parse.unquote(source)
             delete_expr = f"source == '{decoded_source}'" 
@@ -467,7 +472,7 @@ def get_progress(request):
 @permission_classes([IsAuthenticated]) 
 def get_milvus_data(request, collection_name):
     try:
-        connections.connect(alias="default", host="localhost", port="19530")
+        connections.connect("default", host=host, port= port)
         page = request.GET.get("page", 1)
         try:
             page = int(page)

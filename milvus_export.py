@@ -1,8 +1,13 @@
 from pymilvus import connections, Collection
 import pandas as pd
 from sqlalchemy import create_engine
+from dotenv import load_dotenv
+import os
 
-connections.connect(alias="default", host="localhost", port="19530")
+load_dotenv()
+host = os.getenv("HOST")
+port = os.getenv("PORT")
+connections.connect(alias="default", host= host, port= port)
 
 # Specify the collection name
 collection_name = "seventhfeb"
