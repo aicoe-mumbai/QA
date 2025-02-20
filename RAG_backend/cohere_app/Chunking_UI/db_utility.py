@@ -5,7 +5,7 @@ Connection creation to MYSQL
 '''
 def create_connection():
     connection = mysql.connector.connect(
-        host="localhost",
+        host= config("DATABASE_URL"),
         user="root",
         password= config("DATABASE_PASSWORD"),
         database=config("DATABASE_NAME")

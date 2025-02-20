@@ -4,11 +4,15 @@ from sentence_transformers import SentenceTransformer
 from functools import lru_cache 
 from pymilvus import connections, Collection
 from .models import CurrentUsingCollection
-import re
+import re, os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 MODEL_NAME = "/home/aicoe/Desktop/QA/my_saved_model"
-# MILVUS_COLLECTION = 'VPC'
 device = "cuda"
+host = os.getenv("HOST")
+port = os.getenv("PORT")
 
 def get_current_using_collection_value():
     try:
@@ -32,9 +36,10 @@ def load_model_and_tokenizer():
     tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
     return model, tokenizer
 
-model, tokenizer = load_model_and_tokenizer()
+if not os.getenv("SKIP_LOAD_MODEL"):
+    model, tokenizer = load_model_and_tokenizer()
 
-connections.connect("default", host="localhost", port="19530")
+connections.connect("default", host=host, port= port)
 collection = Collection(MILVUS_COLLECTION)
 collection.load()
 embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
@@ -76,7 +81,7 @@ user_sessions = {}
 search_params = {"metric_type": "L2", "params": {"ef": 30}}
 
 def process_query(user_input, selected_file, system_id, batch_size=3):
-    connections.connect("default", host="localhost", port="19530")
+    connections.connect("default", host=host, port= port)
     try:
         # Initialize session if not already present
         if system_id not in user_sessions:
@@ -170,7 +175,7 @@ def process_query(user_input, selected_file, system_id, batch_size=3):
 
 @lru_cache(maxsize=None)
 def get_all_files_from_milvus():
-    connections.connect("default",host = 'localhost', port='19530')
+    connections.connect("default", host=host, port= port)
     collection = Collection(MILVUS_COLLECTION)
     iterator = collection.query_iterator(batch_size=1000,output_fields=["source"])
     results=[]
