@@ -1,3 +1,4 @@
+
 import re
 from tqdm import tqdm
 import fitz
@@ -73,11 +74,53 @@ def process_pptx(file_path):
 
 
 def process_docx(file_path):
-    """ Process .docx file and extract text """
+    """ 
+    Process .docx file and extract text with accurate page tracking:
+    - Uses section breaks to determine pages
+    - Calculates page breaks based on characters and paragraphs
+    - Maintains proper page numbering
+    """
     try:
         doc = DocxDocument(file_path)
-        text_by_paragraph = [(i + 1, para.text) for i, para in enumerate(doc.paragraphs)]
-        return text_by_paragraph, "text extraction done" 
+        text_by_page = []
+        current_page = 1
+        current_page_text = []
+        char_count = 0
+        
+        CHARS_PER_PAGE = 3000
+        
+        for para in doc.paragraphs:
+            para_text = para.text.strip()
+            if not para_text:
+                continue
+                
+            if para._element.xpath('.//w:sectPr'):
+                if current_page_text:
+                    text_by_page.append((current_page, '\n'.join(current_page_text)))
+                    current_page += 1
+                    current_page_text = []
+                    char_count = 0
+            
+            if para._element.xpath('.//w:br[@w:type="page"]'):
+                if current_page_text:
+                    text_by_page.append((current_page, '\n'.join(current_page_text)))
+                    current_page += 1
+                    current_page_text = []
+                    char_count = 0
+            
+            current_page_text.append(para_text)
+            char_count += len(para_text)
+            
+            if char_count >= CHARS_PER_PAGE:
+                text_by_page.append((current_page, '\n'.join(current_page_text)))
+                current_page += 1
+                current_page_text = []
+                char_count = 0
+        
+        if current_page_text:
+            text_by_page.append((current_page, '\n'.join(current_page_text)))
+        
+        return text_by_page, "text extraction done"
     except Exception as e:
         logger.exception(f"Error processing DOCX file {file_path}")
         return [], f"DOCX FILE ERROR : {e}"
@@ -95,15 +138,40 @@ def process_txt(file_path):
 
 
 def process_xlsx(file_path):
-    """ Process .xlsx file and extract text sheet by sheet """
+    """ 
+    Process .xlsx file and extract text sheet by sheet with improved handling:
+    - Skips empty cells
+    - Properly handles None values
+    - Maintains sheet structure
+    - Includes sheet names in output
+    """
     try:
         workbook = openpyxl.load_workbook(file_path)
         text_by_sheet = []
-        for sheet in workbook.sheetnames:
-            worksheet = workbook[sheet]
-            sheet_text = "\n".join([",".join([str(cell.value) for cell in row]) for row in worksheet.iter_rows()])
-            text_by_sheet.append((sheet, sheet_text))
-        return text_by_sheet, "text extraction done"
+        
+        for sheet_name in workbook.sheetnames:
+            worksheet = workbook[sheet_name]
+            sheet_content = []
+            
+            has_content = False
+            
+            for row in worksheet.iter_rows():
+                row_values = []
+                for cell in row:
+                    if cell.value is not None:
+                        cell_value = str(cell.value).strip()
+                        if cell_value:  
+                            row_values.append(cell_value)
+                            has_content = True
+                
+                if row_values: 
+                    sheet_content.append(",".join(row_values))
+            
+            if has_content:
+                sheet_text = f"Sheet: {sheet_name}\n" + "\n".join(sheet_content)
+                text_by_sheet.append((sheet_name, sheet_text))
+        
+        return text_by_sheet, "text extraction done" if text_by_sheet else "No content found in Excel file"
     except Exception as e:
         logger.exception(f"Error processing XLSX file {file_path}")
         return [], f"EXCEL FILE ERROR : {e}"
@@ -130,50 +198,73 @@ def clean_text(text):
     cleaned_text = re.sub(r'^\s*$', '', cleaned_text, flags=re.MULTILINE)
     return cleaned_text.strip()
 
+def clean_chunk(chunk):
+    """
+    Clean a text chunk by removing extra formatting characters.
+    Processes text line-by-line, removing lines that consist mostly of formatting symbols,
+    then collapses extra whitespace.
+    """
+    lines = chunk.splitlines()
+    cleaned_lines = []
+    for line in lines:
+        stripped_line = line.strip()
+        if not stripped_line:
+            continue
+        alnum_count = sum(1 for ch in stripped_line if ch.isalnum())
+        if len(stripped_line) > 0 and (alnum_count / len(stripped_line)) < 0.3:
+            continue
+        cleaned_lines.append(line)
+    cleaned_chunk = " ".join(cleaned_lines)
+    cleaned_chunk = re.sub(r'[\-\+\|=]{2,}', ' ', cleaned_chunk)
+    cleaned_chunk = re.sub(r'\s+', ' ', cleaned_chunk)
+    return cleaned_chunk.strip()
 
-def read_and_split_text(text_by_page, min_chunk_size=800, max_chunk_size=1200):
-    """ Advanced text chunking with intelligent merging and splitting """
+def read_and_split_text(text_by_page, chunk_size=800, overlap_size=200):
+    """
+    Create chunks using a sliding window approach while tracking page numbers.
+    Each chunk is built by concatenating cleaned paragraphs until it reaches at least
+    chunk_size characters, then extended until the end of the sentence if needed.
+    Returns a list of tuples: (chunk_text, page_number).
+    """
+    logger.info(f"Creating chunks from {len(text_by_page)} pages...")
+    
     chunks = []
-
-    def smart_chunk_processing(text, page_number):
-        sentences = max([re.split(r'(?<=[.!?])\s+', text), re.split(r'\n', text)], key=len)
-        current_chunk = ""
-        processed_chunks = []
-
-        for sentence in sentences:
-            if len(sentence) > max_chunk_size:
-                while sentence:
-                    chunk = sentence[:max_chunk_size]
-                    processed_chunks.append(chunk)
-                    sentence = sentence[max_chunk_size:]
-                current_chunk = ""
-                continue
-
-            potential_chunk = (current_chunk + " " + sentence).strip()
+    current_text = ""
+    current_pages = set()
+    
+    for page_num, text in text_by_page:
+        cleaned_para = clean_chunk(text)
+        if not cleaned_para:
+            continue
             
-            if len(potential_chunk) > max_chunk_size:
-                if len(current_chunk) >= min_chunk_size:
-                    processed_chunks.append(current_chunk)
-                    current_chunk = sentence
-                else:
-                    current_chunk = potential_chunk[:max_chunk_size]
-            
-            elif len(potential_chunk) >= min_chunk_size:
-                current_chunk = potential_chunk
-            
-            else:
-                current_chunk = potential_chunk
-
-        if current_chunk and len(current_chunk) >= min_chunk_size:
-            processed_chunks.append(current_chunk)
+        current_text += cleaned_para + " "
+        current_pages.add(page_num)
         
-        return [(chunk, page_number) for chunk in processed_chunks]
-
-
-    for page_num, page_text in text_by_page:
-        page_chunks = smart_chunk_processing(page_text, page_num)
-        chunks.extend(page_chunks)
-
+        while len(current_text) >= chunk_size:
+            chunk = current_text[:chunk_size]
+            
+            if len(current_text) > chunk_size and current_text[chunk_size] == '.':
+                chunk = current_text[:chunk_size+1]
+            elif not chunk.rstrip().endswith('.'):
+                period_index = current_text.find('.', chunk_size)
+                if period_index != -1:
+                    chunk = current_text[:period_index + 1]
+            
+            chunk = chunk.strip()
+            if chunk:
+                start_page = min(current_pages) if current_pages else page_num
+                end_page = max(current_pages) if current_pages else page_num
+                chunks.append((chunk, start_page, end_page))
+            
+            current_text = current_text[len(chunk) - overlap_size:].strip()
+            current_pages = {page_num}
+    
+    if current_text.strip():
+        start_page = min(current_pages) if current_pages else page_num
+        end_page = max(current_pages) if current_pages else page_num
+        chunks.append((current_text.strip(), start_page, end_page))
+    
+    logger.info(f"Created {len(chunks)} chunks")
     return chunks
 
 
@@ -202,9 +293,8 @@ def process_document(file_path):
 def create_langchain_documents(found_files, collection_name):
     """
     Create langchain documents from the extracted and processed text.
-
-    This function processes PDF, PPTX, DOCX, TXT, XLSX, and CSV files in parallel.
-    If a PDF requires OCR processing (no text found), it's handled sequentially.
+    Now uses sliding window chunking for better text segmentation.
+    Improved page number handling to avoid unnecessary ranges.
     """
     db_utility.create_user_access(collection_name)
     db_utility.chunking_monitor()
@@ -215,43 +305,76 @@ def create_langchain_documents(found_files, collection_name):
         text_by_page, message = process_document(file)
         if text_by_page and 'error' not in message.lower():
             chunks = read_and_split_text(text_by_page)
-            logger.info(f"current processing file {file} with {len(str(chunks))}")
-            if len(str(chunks)) > 5:
-                for chunk, page_num in chunks:
-                    documents = []
-                    doc = Document(page_content=chunk, metadata={'source': file, 'page': str(page_num)})
+            logger.info(f"Current processing file {file} with {len(chunks)} chunks")
+            
+            if chunks:
+                documents = []
+                for chunk, start_page, end_page in chunks:
+                    doc = Document(
+                        page_content=chunk,
+                        metadata={
+                            'source': file,
+                            'page': str(start_page)
+                        }
+                    )
                     documents.append(doc)
 
-                    if documents:
-                        Milvus.from_documents(documents, embeddings, collection_name=collection_name,
-                                            connection_args={'uri': "http://localhost:19530"})
-            
-                    
-                db_utility.insert_user_access(file, 'YES', message, collection_name)
+                if documents:
+                    try:
+                        Milvus.from_documents(
+                            documents,
+                            embeddings,
+                            collection_name=collection_name,
+                            connection_args={'uri': "http://localhost:19530"}
+                        )
+                        db_utility.insert_user_access(file, 'YES', message, collection_name)
+                    except Exception as e:
+                        error_message = f"Error inserting into Milvus: {str(e)}"
+                        logger.error(error_message)
+                        db_utility.store_error_files_with_error(collection_name, file, error_message)
             else:
-                db_utility.store_error_files_with_error(collection_name, file, "Too small chunk size -- document skipped")
+                db_utility.store_error_files_with_error(collection_name, file, "No valid chunks generated")
+                
         elif "error" in message.lower() and "ocr" not in message.lower():
             db_utility.store_error_files_with_error(collection_name, file, message)
             logger.error(f"Error in the document - Skipping {file}")
+            
         progress_percentage = (file_index + 1) / len(found_files) * 100
         yield {"progress_percentage": progress_percentage, "current_progress": file_index + 1, "total_files": len(found_files)}
 
     # Process OCR files
-    documents = []
     for ocr_file_index, ocr_file in enumerate(tqdm(OCR_LIST, desc="Overall Progress")):
-        tqdm().set_description(f"Processing File :  {ocr_file}")
+        tqdm().set_description(f"Processing File: {ocr_file}")
         text_by_page, message = process_ocr_document(ocr_file)
         if text_by_page:
             chunks = read_and_split_text(text_by_page)
-            logger.info(f"current processing file {file} with {len(str(chunks))}")
-            if len(str(chunks)) > 3:
-                for chunk, page_num in chunks:
-                    documents = []
-                    doc = Document(page_content=chunk, metadata={'source': ocr_file, 'page': str(page_num)})
+            logger.info(f"Current processing OCR file {ocr_file} with {len(chunks)} chunks")
+            
+            if chunks:
+                documents = []
+                for chunk, start_page, end_page in chunks:
+                    doc = Document(
+                        page_content=chunk,
+                        metadata={
+                            'source': ocr_file,
+                            'page': str(start_page)
+                        }
+                    )
                     documents.append(doc)
-                    if documents:
-                        Milvus.from_documents(documents, embeddings, collection_name=collection_name,
-                                            connection_args={'uri': "http://localhost:19530"})
-                db_utility.update_ocr_status(ocr_file, collection_name)
+                    
+                if documents:
+                    try:
+                        Milvus.from_documents(
+                            documents,
+                            embeddings,
+                            collection_name=collection_name,
+                            connection_args={'uri': "http://localhost:19530"}
+                        )
+                        db_utility.update_ocr_status(ocr_file, collection_name)
+                    except Exception as e:
+                        error_message = f"Error inserting OCR document into Milvus: {str(e)}"
+                        logger.error(error_message)
+                        db_utility.store_error_files_with_error(collection_name, ocr_file, error_message)
+                        
         progress_percentage = (ocr_file_index + 1) / len(OCR_LIST) * 100
         yield {"progress_percentage": progress_percentage, "current_progress": ocr_file_index + 1, "total_files": len(OCR_LIST)}

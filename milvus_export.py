@@ -5,7 +5,7 @@ from sqlalchemy import create_engine
 connections.connect(alias="default", host="localhost", port="19530")
 
 # Specify the collection name
-collection_name = "seventhfeb"
+collection_name = "test20feb"
 collection = Collection(name=collection_name)
 collection.load()
 
@@ -27,6 +27,6 @@ while True:
 
 df = pd.DataFrame(all_data)
 engine = create_engine('sqlite:///exported_collection.db')
-df.to_sql('seventhfeb', con=engine, if_exists='replace', index=False)
+df.to_sql('test20feb', con=engine, if_exists='replace', index=False)
 
 print("Data exported to 'exported_collection.db' in the 'QC_Collection_3' table.")
