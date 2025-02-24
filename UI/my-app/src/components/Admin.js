@@ -45,11 +45,13 @@ const AdminDashboard = () => {
         const data = await response.json();
         setCollections(data.collections);
       } catch (error) {
+        console.log("Token", token)
+        console.log(sessionStorage)
         console.error("Error fetching collections:", error);
-        alert("Some error occurred. Please login again.");
-        sessionStorage.removeItem('authToken');
-        sessionStorage.removeItem('refreshToken');
-        sessionStorage.clear();
+        alert("Some error occurred. Please login again.", error);
+        // sessionStorage.removeItem('authToken');
+        // sessionStorage.removeItem('refreshToken');
+        // sessionStorage.clear();
         navigate("/login");
       } finally {
         setLoading(false);
@@ -85,9 +87,10 @@ const AdminDashboard = () => {
     } catch (error) {
       console.error("Error fetching collections:", error);
       alert("Some error occurred. Please login again.");
-      sessionStorage.removeItem('authToken');
-      sessionStorage.removeItem('refreshToken');
-      sessionStorage.clear();
+      console.log("token", token)
+      // sessionStorage.removeItem('authToken');
+      // sessionStorage.removeItem('refreshToken');
+      // sessionStorage.clear();
       navigate("/login");
     } finally {
       setLoading(false);

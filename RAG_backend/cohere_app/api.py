@@ -1,15 +1,33 @@
 from threading import Thread
-from transformers import AutoTokenizer, AutoModelForCausalLM, TextIteratorStreamer
 from sentence_transformers import SentenceTransformer
 from functools import lru_cache 
 from pymilvus import connections, Collection
 from .models import CurrentUsingCollection
 import re, os
 from dotenv import load_dotenv
+from langchain.vectorstores import FAISS
+from langchain.document_loaders import PyPDFLoader
+from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 load_dotenv()
 
-MODEL_NAME = "/home/aicoe/Desktop/QA/my_saved_model"
+import requests
+import json
+
+url = "http://172.16.34.240:8080/v1/chat/completions"
+headers = {
+    "Content-Type": "application/json"
+}
+
+prompt = """
+You are an AI assistant designed to assist users by providing simple and clear answers to their questions.
+        INSTRUCTIONS:
+        - Avoid repeating the same phrase or sentence multiple times.
+        - Context is generated from database so user is not aware about context, so understand the user question and respond to it.
+
+        Provide a concise response unless the user requests more details."""
+
+
 device = "cuda"
 host = os.getenv("HOST")
 port = os.getenv("PORT")
@@ -31,51 +49,57 @@ collection_name = get_current_using_collection_value()
 if collection_name:
     MILVUS_COLLECTION = collection_name
 
-def load_model_and_tokenizer():
-    model = AutoModelForCausalLM.from_pretrained(MODEL_NAME).to(device)
-    tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
-    return model, tokenizer
+def generate_streaming_response(question, context):
+    data = {
+        "model": "tgi",
+        "messages": [
+            {
+                "role": "system",
+                "content": prompt
+            },
+            {
+                "role": "user",
+                "content": f"Refer to the Context scrapped from Vector Database {context} and answer for user question {question}"     
+            }
+        ],
+        "stream": True,
+        "max_tokens": 1500
+    }
 
-if not os.getenv("SKIP_LOAD_MODEL"):
-    model, tokenizer = load_model_and_tokenizer()
+    with requests.post(url, headers=headers, data=json.dumps(data), proxies={"http": None, "https": None}, stream=True) as response:
+        if response.status_code == 200:
+            for chunk in response.iter_lines():
+                if chunk:
+                    decoded_chunk = chunk.decode('utf-8')
+                    if decoded_chunk.startswith("data:"):
+                        decoded_chunk = decoded_chunk[5:].strip()
+                    
+                    if decoded_chunk == "[DONE]":
+                        break
+                    
+                    try:
+                        chunk_data = json.loads(decoded_chunk)
+                        content = chunk_data.get('choices', [{}])[0].get('delta', {}).get('content', '')
+                        
+                        if content:
+                            yield content
+                    except json.JSONDecodeError as e:
+                        print(f"JSON Decode Error: {e}")
+                        print(f"Raw chunk (decoded): {decoded_chunk}")
+                    except Exception as e:
+                        print(f"Error processing chunk: {e}")
+        else:
+            print(f"Error: {response.status_code}")
 
 connections.connect("default", host=host, port= port)
 collection = Collection(MILVUS_COLLECTION)
 collection.load()
-embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+embedding_model = SentenceTransformer('/home/qa-prod/Desktop/QA/RAG_backend/cohere_app/embedding_model')
 
 def clean_string(input_string):
     cleaned_string = re.sub(r'\s+', ' ', input_string)
     cleaned_string = cleaned_string.strip()
     return cleaned_string
-
-def generate_streaming_response(input_text):
-    inputs = tokenizer(input_text, return_tensors="pt").to(device)
-    streamer = TextIteratorStreamer(tokenizer, skip_prompt=True, skip_special_tokens=True)
-    thread = Thread(target=model.generate,
-                    kwargs={
-                        "input_ids": inputs['input_ids'],
-                        "streamer": streamer,
-                        "max_new_tokens": 256,
-                        "temperature": 0.3
-                    })
-    thread.start()
-
-    for new_text in streamer:
-        if new_text.strip():
-            yield new_text
-    thread.join()
-
-def generate_response(input_text):
-    inputs = tokenizer(input_text, return_tensors="pt").to(device)
-    output_tokens = model.generate(
-        **inputs, 
-        max_new_tokens=256,
-        temperature=0.3,
-    )
-    
-    output_text = tokenizer.decode(output_tokens[0], skip_special_tokens=True)
-    return output_text
 
 user_sessions = {}
 search_params = {"metric_type": "L2", "params": {"ef": 30}}
@@ -139,28 +163,7 @@ def process_query(user_input, selected_file, system_id, batch_size=3):
             for hit in batch_results
         )
         current_question = session['last_query'] if user_input.lower() == "continue" else user_input
-
-        # Create the response prompt
-        final_prompt = f"""
-        You are an AI assistant designed to assist users by providing simple and clear answers to their questions.
-        
-        ### User Question:
-        {current_question}
-        
-        Refer to the information below for support:
-        ### Context:
-        {context}
-
-        INSTRUCTIONS:
-        - Avoid repeating the same phrase or sentence multiple times.
-        - Context is generated from database so user is not aware about context, so understand the user question and respond to it.
-        - Your output should be the ### AI Assistant Response: 
-
-        Provide a concise response unless the user requests more details.
-        """
-
-        print(final_prompt)
-        for chunk in generate_streaming_response(final_prompt):
+        for chunk in generate_streaming_response(current_question, context):
             yield chunk
         # yield generate_response(final_prompt)
         sources = [
@@ -192,3 +195,23 @@ def get_all_files_from_milvus():
     database_files = list(set(database_files))
     connections.disconnect("default")
     return database_files
+
+def create_faiss_index(doc_path: str, faiss_folder: str):
+    loader = PyPDFLoader(doc_path)
+    documents = loader.load()
+
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=50)
+    split_docs = text_splitter.split_documents(documents)
+    faiss_index = FAISS.from_documents(split_docs, embeddings)
+    os.makedirs(faiss_folder, exist_ok=True)
+    faiss_index.save_local(faiss_folder)
+    print(f"FAISS index saved to: {faiss_folder}")
+
+def chat_with_uploaded_document(faiss_folder, query, top_k = 3):
+    faiss_index = FAISS.load_local(faiss_folder, embeddings)
+    search_results = faiss_index.similarity_search(query, k=top_k)
+    context = ""
+    for i, result in enumerate(search_results):
+        context+= result['text']
+    for chunk in generate_streaming_response(query, context):
+            yield chunk

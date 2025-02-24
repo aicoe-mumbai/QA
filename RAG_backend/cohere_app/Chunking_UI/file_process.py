@@ -19,9 +19,8 @@ host = os.getenv("HOST")
 port = os.getenv("PORT")
 MILVUS_URL = os.getenv("MILVUS_URL")
 
-embeddings = HuggingFaceEmbeddings(model_name='sentence-transformers/all-MiniLM-L6-v2', model_kwargs={'device': "cuda"})
+embeddings = HuggingFaceEmbeddings(model_name='sentence-transformers/all-MiniLM-L6-v2', model_kwargs={'device': "cpu"})
 model = ocr_predictor(pretrained=True)
-model = model.to('cuda')
 OCR_LIST = []
 
 def extract_text_pdf(pdf_path):

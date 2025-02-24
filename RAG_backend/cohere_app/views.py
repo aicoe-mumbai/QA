@@ -6,6 +6,7 @@ import uuid
 import subprocess
 import urllib.parse
 import threading
+from django.contrib.auth import get_user_model
 from pymilvus import connections, Collection, MilvusClient
 from django.http import JsonResponse, StreamingHttpResponse, FileResponse, Http404
 from django.contrib.auth import authenticate
@@ -25,6 +26,7 @@ from .Chunking_UI import file_process, db_utility
 from .Chunking_UI.enable_logging import logger
 from urllib.parse import unquote
 from dotenv import load_dotenv
+from .ldap import auth_main
 load_dotenv()
 
 Milvus_url = os.getenv("MILVUS_URL")
@@ -41,18 +43,26 @@ def login_user(request):
     username = request.data.get("username")
     password = request.data.get("password")
     try:
-        user = authenticate(request, username=username, password=password)
+        user = auth_main(username=username, password=password)
     except Exception as e:
-        print(f'Login error {e}')
+        print(f'Login error: {e}')
+        return Response({"error": "Authentication failed"}, status=status.HTTP_401_UNAUTHORIZED)
     if user is not None:
-        if not UserNames.objects.filter(users=username).exists():
-            UserNames.objects.create(users=username)
-            
-        refresh = RefreshToken.for_user(user)
+        # Check if user already exists in the local DB
+        User = get_user_model()  # If you're using custom user model, make sure this is correct
+        if not User.objects.filter(username=username).exists():
+            # If the user doesn't exist, create a new user in the local database
+            User.objects.create(username=username)
+        
+        # Generate JWT tokens
+        user_instance = User.objects.get(username=username)
+        refresh = RefreshToken.for_user(user_instance)
+        
+        # Return the tokens and username
         return Response({
             'refresh': str(refresh),
             'access': str(refresh.access_token),
-            'username': user.username
+            'username': user_instance.username
         })
     return Response({"error": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
 
@@ -309,7 +319,7 @@ def serve_file(request, filename, page_number):
  Admin panel starts here
 
 '''
-@csrf_exempt 
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_collection_name(request):
@@ -320,7 +330,6 @@ def get_collection_name(request):
         return JsonResponse({"error": str(e)}, status=500)
 
 
-@csrf_exempt  
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def collection_files(request, collection_name):
@@ -343,7 +352,6 @@ def collection_files(request, collection_name):
     return JsonResponse({"error": "Invalid request method"}, status=405)
 
 
-@csrf_exempt 
 @api_view(['DELETE'])
 @permission_classes([IsAuthenticated]) 
 def delete_collection(request, collection_name):
@@ -362,7 +370,6 @@ def delete_collection(request, collection_name):
         return JsonResponse({"error": str(e)}, status=500)
 
 
-@csrf_exempt
 @api_view(['DELETE'])
 @permission_classes([IsAuthenticated]) 
 def delete_file(request, source, collection_name):
@@ -556,7 +563,6 @@ def update_current_collection(request):
 
 
 
-@csrf_exempt
 @api_view(["GET"])
 @permission_classes([IsAuthenticated]) 
 def restart_server(request):

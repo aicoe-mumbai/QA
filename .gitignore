@@ -1,4 +1,4 @@
-llm-env/
+qc-env/
 __pycache__/
 QC_Documents
 QA/RAG_backend/cohere_app/__pycache__

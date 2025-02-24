@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import './PromptResponseCard.css';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -11,6 +10,7 @@ function PromptResponseCard({ item, index, editingIndex, setEditingIndex, handle
   const [isThumbsDownActive, setIsThumbsDownActive] = useState(false);
   const [comment, setComment] = useState('');
   const [isCommentSubmitted, setIsCommentSubmitted] = useState(false);
+  const [isThinkingVisible, setIsThinkingVisible] = useState(true); // Automatically show "Thinking"
   const apiUrl = process.env.REACT_APP_API_URL;
 
   const handleEditClick = () => {
@@ -85,7 +85,6 @@ function PromptResponseCard({ item, index, editingIndex, setEditingIndex, handle
     }
   };
 
-
   const handleCommentSubmit = async () => {
     const token = sessionStorage.getItem('authToken');
 
@@ -110,7 +109,6 @@ function PromptResponseCard({ item, index, editingIndex, setEditingIndex, handle
     }
   };
 
-
   const handlePdfClick = async (fileName, pageNumber) => {
     const token = sessionStorage.getItem('authToken');
 
@@ -121,7 +119,6 @@ function PromptResponseCard({ item, index, editingIndex, setEditingIndex, handle
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
-
         },
       });
 
@@ -147,7 +144,23 @@ function PromptResponseCard({ item, index, editingIndex, setEditingIndex, handle
     }
   };
 
+  // Function to process response and extract thinking content before </think>
   const processResponseLinks = (responseText) => {
+    const thinkingContent = responseText.split('</think>')[0].trim();
+    const mainContent = responseText.split('</think>')[1]?.trim();
+
+    return { thinkingContent, mainContent };
+  };
+
+  const { thinkingContent, mainContent } = processResponseLinks(item.response || "");
+
+  // Toggle thinking content visibility
+  const toggleThinkingVisibility = () => {
+    setIsThinkingVisible(!isThinkingVisible);
+  };
+
+  // Function to render source links
+  const renderSourceLinks = (responseText) => {
     return responseText.split('\n\n').map((part, index) => {
       const updatedPart = part.split(/(Source:\s.*?\.[a-zA-Z0-9]+ \| Page:\s\d+)/gi).map((chunk, idx) => {
         const sourceMatch = chunk.match(/Source:\s(.*?)\s?\| Page:\s(\d+)/i);
@@ -161,9 +174,7 @@ function PromptResponseCard({ item, index, editingIndex, setEditingIndex, handle
 
           return (
             <div key={fileName + pageNumber}>
-
               <a
-                key={fileName + pageNumber}
                 href={`/api/serve-file/${encodedFileName}/${pageNumber}/`}
                 onClick={(e) => {
                   e.preventDefault();
@@ -186,7 +197,6 @@ function PromptResponseCard({ item, index, editingIndex, setEditingIndex, handle
       );
     });
   };
-
 
   return (
     <div className="card-container">
@@ -218,16 +228,27 @@ function PromptResponseCard({ item, index, editingIndex, setEditingIndex, handle
       />
 
       <div className="response-card">
+        {/* Thinking content will now be part of the response */}
+        {thinkingContent && (
+          <div className="thinking-container">
+            <div
+              className="thinking-indicator"
+              onClick={toggleThinkingVisibility}  // Click to toggle thinking content visibility
+            >
+              <span>Thinking...</span>
+            </div>
+            {isThinkingVisible && (
+              <div className="thinking-content">
+                <p>{thinkingContent}</p>
+              </div>
+            )}
+          </div>
+        )}
 
-        <p>
-          {item.response ? (
-            processResponseLinks(item.response)
-          ) : (
-            'Loading...'
-          )}
-        </p>
+        {/* Main response content */}
+        <p>{mainContent ? renderSourceLinks(mainContent) : 'Loading...'}</p>
+
         <div className="pdf-button-container">
-
           <div className="continue-container">
             <FontAwesomeIcon icon={faArrowDown} className="arrow-icon" />
             <button
@@ -238,7 +259,6 @@ function PromptResponseCard({ item, index, editingIndex, setEditingIndex, handle
             </button>
           </div>
         </div>
-
 
         <div className='thumps'>
           <div className='copy-icon' onClick={handleCopyToClipboard}>

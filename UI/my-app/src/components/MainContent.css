@@ -27,6 +27,27 @@
   color: transparent;
 }
 
+.thinking-container {
+  margin-top: 10px;
+  background-color: #f0f0f0;
+  padding: 10px;
+  border-radius: 8px;
+}
+
+.thinking-indicator {
+  font-family: 'Courier New', Courier, monospace;
+  font-weight: bold;
+  color: #007bff;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.thinking-content {
+  font-family: 'Arial', sans-serif;
+  font-size: 14px;
+  color: #555;
+  margin-top: 10px;
+}
 
 
 .responses-list {

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './LeftSidebar.css';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faHistory, faSignOutAlt } from '@fortawesome/free-solid-svg-icons';
+import { faHistory, faSignOutAlt, faCloudArrowUp } from '@fortawesome/free-solid-svg-icons';
 import Select from 'react-select';
 import { Cascader } from "antd";
 
@@ -247,6 +247,12 @@ function LeftSidebar({ history, onHistoryClick, onFileSelect, onLogout }) {
           className="multi-select"
         />
       </div>
+
+      <label className="custom-file-input">
+        <FontAwesomeIcon icon={faCloudArrowUp} className="upload" />
+        Upload document
+        <input type="file" />
+      </label>
 
       <div className="history-section">
         <h4>Today</h4>
